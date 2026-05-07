@@ -34,6 +34,7 @@ const CATEGORY_ID = "1501579361453871255";
 const FARM_CHANNEL_ID = "1501577664341999870";
 const FARM_MANAGER_ROLE = "1501776069764845589";
 const FARM_BOSS_ROLE = "1501576408663851088";
+const FARM_CATEGORY_ID = "1501577320266465290";
 /* ========================================== */
 
 const registros = new Map();
@@ -55,7 +56,6 @@ client.once("clientReady", () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  /* PAINEL REGISTRO */
   if (message.content === "!painel") {
     if (message.channel.id !== REGISTER_CHANNEL_ID) return;
 
@@ -74,7 +74,6 @@ client.on("messageCreate", async (message) => {
     await message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* RESPOSTAS REGISTRO */
   const registro = registros.get(message.author.id);
 
   if (registro && message.channel.id === registro.canalId) {
@@ -126,7 +125,7 @@ client.on("messageCreate", async (message) => {
     setTimeout(() => message.channel.delete().catch(() => {}), 10000);
   }
 
-  /* ================= FARM ================= */
+  /* ================= FARM PAINEL ================= */
   if (message.content === "!farm") {
     if (message.channel.id !== FARM_CHANNEL_ID) return;
 
@@ -182,49 +181,14 @@ client.on("interactionCreate", async (interaction) => {
     await canal.send(`${interaction.user}\n${perguntas[0]}`);
   }
 
-  /* APROVAR */
-  if (interaction.customId.startsWith("aprovar_")) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId);
-
-    await member.roles.add(ROLE_ID);
-    await member.setNickname(`[FAC] ${member.user.username}`);
-
-    const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
-
-    await resultChannel.send(`✅ APROVADO: ${member}`);
-
-    const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
-
-    await logChannel.send(`📋 ${member.user.tag} aprovado por ${interaction.user.tag}`);
-
-    await interaction.reply({ content: "Aprovado!", flags: 64 });
-  }
-
-  /* RECUSAR */
-  if (interaction.customId.startsWith("recusar_")) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId);
-
-    const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
-
-    await resultChannel.send(`❌ RECUSADO: ${member}`);
-
-    const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
-
-    await logChannel.send(`📋 ${member.user.tag} recusado por ${interaction.user.tag}`);
-
-    await interaction.reply({ content: "Recusado!", flags: 64 });
-  }
-
-  /* ================= FARM ================= */
+  /* ================= FARM (CORRIGIDO) ================= */
   if (interaction.customId === "abrir_farm") {
     const guild = interaction.guild;
 
     const canal = await guild.channels.create({
-      name: `farm-${interaction.user.username}`,
+      name: `farm-${interaction.user.username}`, // ✔ CORRIGIDO AQUI
       type: ChannelType.GuildText,
-      parent: 1501577320266465290,
+      parent: FARM_CATEGORY_ID, // ✔ categoria certa
       permissionOverwrites: [
         { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
         {
@@ -256,16 +220,18 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ content: `Criado: ${canal}`, flags: 64 });
 
     await canal.send({
-      content: `${interaction.user} sua pasta foi criada.`,
+      content: `${interaction.user} sua pasta de farm foi criada.`,
       components: [row]
     });
   }
 
+  /* FECHAR FARM */
   if (interaction.customId === "fechar_farm") {
     await interaction.reply({ content: "Fechando...", flags: 64 });
     setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
   }
 
+  /* VER METAS */
   if (interaction.customId === "ver_metas") {
     const embed = new EmbedBuilder()
       .setTitle("Tropa da Leste | Meta de Farm")
