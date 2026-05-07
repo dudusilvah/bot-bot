@@ -224,7 +224,7 @@ client.on("interactionCreate", async (interaction) => {
     const canal = await guild.channels.create({
       name: `farm-${interaction.user.username}`,
       type: ChannelType.GuildText,
-      parent: CATEGORY_ID,
+      parent: 1501577320266465290,
       permissionOverwrites: [
         { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
         {
