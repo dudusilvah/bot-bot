@@ -29,19 +29,21 @@ const RESULT_CHANNEL_ID = "1501590299003064362";
 const ROLE_ID = "1501576591145173184";
 const REGISTER_CHANNEL_ID = "1501579466445422652";
 const CATEGORY_ID = "1501579361453871255";
+
+/* FARM CONFIG */
+const FARM_CHANNEL_ID = "1501577664341999870";
+const FARM_MANAGER_ROLE = "1501776069764845589";
+const FARM_BOSS_ROLE = "1501576408663851088";
 /* ========================================== */
 
 const registros = new Map();
+const farms = new Map();
 
 const perguntas = [
   "Digite seu **ID/Passaporte**\nExemplo: `937`\n(Apenas números)",
-
   "Digite seu **Telefone**\nExemplo: `333-333`",
-
   "Já participou de alguma facção antes?",
-
   "Quantas facções já participou?",
-
   "Quem te recrutou?"
 ];
 
@@ -49,22 +51,17 @@ client.once("clientReady", () => {
   console.log(`Bot online: ${client.user.tag}`);
 });
 
+/* ================= REGISTRO ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // Criar painel
+  /* PAINEL REGISTRO */
   if (message.content === "!painel") {
-    if (message.channel.id !== REGISTER_CHANNEL_ID) {
-      return message.reply(
-        "Use esse comando apenas no canal de registro."
-      );
-    }
+    if (message.channel.id !== REGISTER_CHANNEL_ID) return;
 
     const embed = new EmbedBuilder()
       .setTitle("📋 Registro Facção")
-      .setDescription(
-        "Clique no botão abaixo para iniciar seu registro."
-      )
+      .setDescription("Clique no botão abaixo para iniciar seu registro.")
       .setColor("Blue");
 
     const row = new ActionRowBuilder().addComponents(
@@ -74,47 +71,29 @@ client.on("messageCreate", async (message) => {
         .setStyle(ButtonStyle.Success)
     );
 
-    await message.channel.send({
-      embeds: [embed],
-      components: [row]
-    });
+    await message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  // Sistema de respostas
+  /* RESPOSTAS REGISTRO */
   const registro = registros.get(message.author.id);
 
   if (registro && message.channel.id === registro.canalId) {
-    // validar ID
-    if (registro.etapa === 0 && !/^\d+$/.test(message.content)) {
-      return message.channel.send(
-        "❌ Apenas números.\nExemplo: `937`"
-      );
-    }
+    if (registro.etapa === 0 && !/^\d+$/.test(message.content))
+      return message.channel.send("❌ Apenas números. Ex: 937");
 
-    // validar telefone
-    if (
-      registro.etapa === 1 &&
-      !/^\d{3}-\d{3}$/.test(message.content)
-    ) {
-      return message.channel.send(
-        "❌ Formato inválido.\nUse: `333-333`"
-      );
-    }
+    if (registro.etapa === 1 && !/^\d{3}-\d{3}$/.test(message.content))
+      return message.channel.send("❌ Use: 333-333");
 
     registro.respostas.push(message.content);
     registro.etapa++;
 
     if (registro.etapa < perguntas.length) {
-      return message.channel.send(
-        perguntas[registro.etapa]
-      );
+      return message.channel.send(perguntas[registro.etapa]);
     }
 
     registros.delete(message.author.id);
 
-    const guild = message.guild;
-    const staffChannel =
-      guild.channels.cache.get(STAFF_CHANNEL_ID);
+    const staffChannel = message.guild.channels.cache.get(STAFF_CHANNEL_ID);
 
     const embed = new EmbedBuilder()
       .setTitle("📨 Novo Registro")
@@ -123,8 +102,8 @@ client.on("messageCreate", async (message) => {
         { name: "Usuário", value: message.author.tag },
         { name: "ID", value: registro.respostas[0] },
         { name: "Telefone", value: registro.respostas[1] },
-        { name: "Participou de facção", value: registro.respostas[2] },
-        { name: "Quantas facções", value: registro.respostas[3] },
+        { name: "Facção anterior", value: registro.respostas[2] },
+        { name: "Quantidade", value: registro.respostas[3] },
         { name: "Recrutador", value: registro.respostas[4] }
       );
 
@@ -140,25 +119,40 @@ client.on("messageCreate", async (message) => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await staffChannel.send({
-      embeds: [embed],
-      components: [row]
-    });
+    await staffChannel.send({ embeds: [embed], components: [row] });
 
-    await message.channel.send(
-      "✅ Registro enviado para staff.\nCanal será apagado em 10 segundos."
+    await message.channel.send("Registro enviado. Canal será apagado em 10s");
+
+    setTimeout(() => message.channel.delete().catch(() => {}), 10000);
+  }
+
+  /* ================= FARM ================= */
+  if (message.content === "!farm") {
+    if (message.channel.id !== FARM_CHANNEL_ID) return;
+
+    const embed = new EmbedBuilder()
+      .setTitle("Tropa da Leste | Painel de Farm")
+      .setDescription("Clique para abrir sua pasta de farm.")
+      .setThumbnail(message.guild.iconURL({ dynamic: true, size: 512 }))
+      .setColor("Green");
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("abrir_farm")
+        .setLabel("Abrir Pasta")
+        .setEmoji("📁")
+        .setStyle(ButtonStyle.Success)
     );
 
-    setTimeout(() => {
-      message.channel.delete().catch(() => {});
-    }, 10000);
+    await message.channel.send({ embeds: [embed], components: [row] });
   }
 });
 
+/* ================= INTERACTIONS ================= */
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
-  // Criar canal temporário
+  /* REGISTRO */
   if (interaction.customId === "iniciar_registro") {
     const guild = interaction.guild;
 
@@ -167,16 +161,12 @@ client.on("interactionCreate", async (interaction) => {
       type: ChannelType.GuildText,
       parent: CATEGORY_ID,
       permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionsBitField.Flags.ViewChannel]
-        },
+        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
         {
           id: interaction.user.id,
           allow: [
             PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages,
-            PermissionsBitField.Flags.ReadMessageHistory
+            PermissionsBitField.Flags.SendMessages
           ]
         }
       ]
@@ -188,89 +178,107 @@ client.on("interactionCreate", async (interaction) => {
       canalId: canal.id
     });
 
-    await interaction.reply({
-      content: `✅ Canal criado: ${canal}`,
-      flags: 64
-    });
-
-    await canal.send(
-      `${interaction.user}\nBem-vindo ao registro.\n\n${perguntas[0]}`
-    );
+    await interaction.reply({ content: `Canal criado: ${canal}`, flags: 64 });
+    await canal.send(`${interaction.user}\n${perguntas[0]}`);
   }
 
-  // Aprovar
+  /* APROVAR */
   if (interaction.customId.startsWith("aprovar_")) {
-    try {
-      const userId = interaction.customId.split("_")[1];
-      const member =
-        await interaction.guild.members.fetch(userId);
+    const userId = interaction.customId.split("_")[1];
+    const member = await interaction.guild.members.fetch(userId);
 
-      await member.roles.add(ROLE_ID);
-      await member.setNickname(
-        `[FAC] ${member.user.username}`
-      );
+    await member.roles.add(ROLE_ID);
+    await member.setNickname(`[FAC] ${member.user.username}`);
 
-      const resultChannel =
-        interaction.guild.channels.cache.get(
-          RESULT_CHANNEL_ID
-        );
+    const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
-      await resultChannel.send(
-        `✅ **APROVADO**\nUsuário: ${member}\nStatus: Aprovado na facção`
-      );
+    await resultChannel.send(`✅ APROVADO: ${member}`);
 
-      const logChannel =
-        interaction.guild.channels.cache.get(
-          LOG_CHANNEL_ID
-        );
+    const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
 
-      await logChannel.send(
-        `📋 ${member.user.tag} aprovado por ${interaction.user.tag} em ${new Date().toLocaleString()}`
-      );
+    await logChannel.send(`📋 ${member.user.tag} aprovado por ${interaction.user.tag}`);
 
-      await interaction.reply({
-        content: "✅ Usuário aprovado.",
-        flags: 64
-      });
-    } catch (error) {
-      console.error(error);
-
-      await interaction.reply({
-        content:
-          "❌ Erro ao aprovar. Verifique permissões e posição do cargo.",
-        flags: 64
-      });
-    }
+    await interaction.reply({ content: "Aprovado!", flags: 64 });
   }
 
-  // Recusar
+  /* RECUSAR */
   if (interaction.customId.startsWith("recusar_")) {
     const userId = interaction.customId.split("_")[1];
-    const member =
-      await interaction.guild.members.fetch(userId);
+    const member = await interaction.guild.members.fetch(userId);
 
-    const resultChannel =
-      interaction.guild.channels.cache.get(
-        RESULT_CHANNEL_ID
-      );
+    const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
-    await resultChannel.send(
-      `❌ **RECUSADO**\nUsuário: ${member}\nStatus: Registro recusado`
-    );
+    await resultChannel.send(`❌ RECUSADO: ${member}`);
 
-    const logChannel =
-      interaction.guild.channels.cache.get(
-        LOG_CHANNEL_ID
-      );
+    const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
 
-    await logChannel.send(
-      `📋 ${member.user.tag} recusado por ${interaction.user.tag} em ${new Date().toLocaleString()}`
-    );
+    await logChannel.send(`📋 ${member.user.tag} recusado por ${interaction.user.tag}`);
 
-    await interaction.reply({
-      content: "❌ Usuário recusado.",
-      flags: 64
+    await interaction.reply({ content: "Recusado!", flags: 64 });
+  }
+
+  /* ================= FARM ================= */
+  if (interaction.customId === "abrir_farm") {
+    const guild = interaction.guild;
+
+    const canal = await guild.channels.create({
+      name: `farm-${interaction.user.username}`,
+      type: ChannelType.GuildText,
+      parent: CATEGORY_ID,
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        {
+          id: interaction.user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages
+          ]
+        },
+        { id: FARM_MANAGER_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] },
+        { id: FARM_BOSS_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] }
+      ]
     });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("fechar_farm")
+        .setLabel("Fechar Pasta")
+        .setEmoji("❌")
+        .setStyle(ButtonStyle.Danger),
+
+      new ButtonBuilder()
+        .setCustomId("ver_metas")
+        .setLabel("Ver Metas")
+        .setEmoji("👁")
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    await interaction.reply({ content: `Criado: ${canal}`, flags: 64 });
+
+    await canal.send({
+      content: `${interaction.user} sua pasta foi criada.`,
+      components: [row]
+    });
+  }
+
+  if (interaction.customId === "fechar_farm") {
+    await interaction.reply({ content: "Fechando...", flags: 64 });
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+  }
+
+  if (interaction.customId === "ver_metas") {
+    const embed = new EmbedBuilder()
+      .setTitle("Tropa da Leste | Meta de Farm")
+      .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 512 }))
+      .setColor("Blue")
+      .addFields(
+        { name: "Frequência", value: "Semanal" },
+        { name: "Descrição", value: "Entregar em mãos para Braga" },
+        { name: "Quantidade", value: "450" },
+        { name: "Tipo", value: "Farinha de Trigo" }
+      );
+
+    await interaction.reply({ embeds: [embed], flags: 64 });
   }
 });
 
