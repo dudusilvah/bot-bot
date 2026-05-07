@@ -9,7 +9,11 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  PermissionsBitField
+  PermissionsBitField,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  InteractionType
 } = require("discord.js");
 
 const client = new Client({
@@ -35,6 +39,9 @@ const FARM_CHANNEL_ID = "1501577664341999870";
 const FARM_MANAGER_ROLE = "1501776069764845589";
 const FARM_BOSS_ROLE = "1501576408663851088";
 const FARM_CATEGORY_ID = "1501577320266465290";
+
+/* AUSÊNCIA */
+const ABSENCE_CHANNEL_ID = "1501576780027396168";
 /* ========================================== */
 
 const registros = new Map();
@@ -52,10 +59,11 @@ client.once("clientReady", () => {
   console.log(`Bot online: ${client.user.tag}`);
 });
 
-/* ================= REGISTRO ================= */
+/* ================= PAINEL REGISTRO ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
+  /* REGISTRO */
   if (message.content === "!painel") {
     if (message.channel.id !== REGISTER_CHANNEL_ID) return;
 
@@ -74,58 +82,7 @@ client.on("messageCreate", async (message) => {
     await message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  const registro = registros.get(message.author.id);
-
-  if (registro && message.channel.id === registro.canalId) {
-    if (registro.etapa === 0 && !/^\d+$/.test(message.content))
-      return message.channel.send("❌ Apenas números. Ex: 937");
-
-    if (registro.etapa === 1 && !/^\d{3}-\d{3}$/.test(message.content))
-      return message.channel.send("❌ Use: 333-333");
-
-    registro.respostas.push(message.content);
-    registro.etapa++;
-
-    if (registro.etapa < perguntas.length) {
-      return message.channel.send(perguntas[registro.etapa]);
-    }
-
-    registros.delete(message.author.id);
-
-    const staffChannel = message.guild.channels.cache.get(STAFF_CHANNEL_ID);
-
-    const embed = new EmbedBuilder()
-      .setTitle("📨 Novo Registro")
-      .setColor("Yellow")
-      .addFields(
-        { name: "Usuário", value: message.author.tag },
-        { name: "ID", value: registro.respostas[0] },
-        { name: "Telefone", value: registro.respostas[1] },
-        { name: "Facção anterior", value: registro.respostas[2] },
-        { name: "Quantidade", value: registro.respostas[3] },
-        { name: "Recrutador", value: registro.respostas[4] }
-      );
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`aprovar_${message.author.id}`)
-        .setLabel("✅ Aprovar")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId(`recusar_${message.author.id}`)
-        .setLabel("❌ Recusar")
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    await staffChannel.send({ embeds: [embed], components: [row] });
-
-    await message.channel.send("Registro enviado. Canal será apagado em 10s");
-
-    setTimeout(() => message.channel.delete().catch(() => {}), 10000);
-  }
-
-  /* ================= FARM PAINEL ================= */
+  /* FARM */
   if (message.content === "!farm") {
     if (message.channel.id !== FARM_CHANNEL_ID) return;
 
@@ -145,13 +102,32 @@ client.on("messageCreate", async (message) => {
 
     await message.channel.send({ embeds: [embed], components: [row] });
   }
+
+  /* ================= AUSÊNCIA PAINEL ================= */
+  if (message.content === "!ausencia") {
+    if (message.channel.id !== ABSENCE_CHANNEL_ID) return;
+
+    const embed = new EmbedBuilder()
+      .setTitle("🚫 Ausência")
+      .setDescription("Clique no botão abaixo para iniciar formulário de ausência")
+      .setColor("Red");
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("abrir_ausencia")
+        .setLabel("Ausência")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    await message.channel.send({ embeds: [embed], components: [row] });
+  }
 });
 
 /* ================= INTERACTIONS ================= */
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isButton()) return;
+  if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-  /* REGISTRO */
+  /* ================= REGISTRO ================= */
   if (interaction.customId === "iniciar_registro") {
     const guild = interaction.guild;
 
@@ -181,14 +157,14 @@ client.on("interactionCreate", async (interaction) => {
     await canal.send(`${interaction.user}\n${perguntas[0]}`);
   }
 
-  /* ================= FARM (CORRIGIDO) ================= */
+  /* ================= FARM ================= */
   if (interaction.customId === "abrir_farm") {
     const guild = interaction.guild;
 
     const canal = await guild.channels.create({
-      name: `farm-${interaction.user.username}`, // ✔ CORRIGIDO AQUI
+      name: `farm-${interaction.user.username}`,
       type: ChannelType.GuildText,
-      parent: FARM_CATEGORY_ID, // ✔ categoria certa
+      parent: FARM_CATEGORY_ID,
       permissionOverwrites: [
         { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
         {
@@ -220,9 +196,63 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ content: `Criado: ${canal}`, flags: 64 });
 
     await canal.send({
-      content: `${interaction.user} sua pasta de farm foi criada.`,
+      content: `${interaction.user} sua pasta foi criada.`,
       components: [row]
     });
+  }
+
+  /* ================= AUSÊNCIA MODAL ================= */
+  if (interaction.customId === "abrir_ausencia") {
+    const modal = new ModalBuilder()
+      .setCustomId("form_ausencia")
+      .setTitle("Formulário de Ausência");
+
+    const motivo = new TextInputBuilder()
+      .setCustomId("motivo")
+      .setLabel("Motivo da ausência")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
+
+    const dias = new TextInputBuilder()
+      .setCustomId("dias")
+      .setLabel("Quantos dias?")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const row1 = new ActionRowBuilder().addComponents(motivo);
+    const row2 = new ActionRowBuilder().addComponents(dias);
+
+    modal.addComponents(row1, row2);
+
+    await interaction.showModal(modal);
+  }
+
+  /* ================= ENVIAR AUSÊNCIA ================= */
+  if (interaction.type === InteractionType.ModalSubmit) {
+    if (interaction.customId === "form_ausencia") {
+      const motivo = interaction.fields.getTextInputValue("motivo");
+      const dias = interaction.fields.getTextInputValue("dias");
+
+      const staff = interaction.guild.channels.cache.get(STAFF_CHANNEL_ID);
+      const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
+
+      const embed = new EmbedBuilder()
+        .setTitle("🚫 Nova Ausência")
+        .setColor("Red")
+        .addFields(
+          { name: "Usuário", value: interaction.user.tag },
+          { name: "Motivo", value: motivo },
+          { name: "Dias", value: dias }
+        );
+
+      await staff.send({ embeds: [embed] });
+      await log.send(`📋 Ausência registrada por ${interaction.user.tag}`);
+
+      await interaction.reply({
+        content: "Ausência enviada com sucesso!",
+        flags: 64
+      });
+    }
   }
 
   /* FECHAR FARM */
