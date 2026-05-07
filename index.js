@@ -30,7 +30,9 @@ const client = new Client({
 const STAFF_CHANNEL_ID = "1501578418834112554";
 const LOG_CHANNEL_ID = "1501628297056882820";
 const RESULT_CHANNEL_ID = "1501590299003064362";
-const ROLE_ID = "1501576591145173184";
+
+const ROLE_ID = "1501576591145173184"; // ✔ CARGO REGISTRO
+
 const REGISTER_CHANNEL_ID = "1501579466445422652";
 const CATEGORY_ID = "1501579361453871255";
 
@@ -42,13 +44,13 @@ const FARM_CATEGORY_ID = "1501577320266465290";
 
 /* AUSÊNCIA */
 const ABSENCE_CHANNEL_ID = "1501576780027396168";
+const ABSENCE_LOG_CHANNEL_ID = "1501781507235119135"; // ✔ FIX FINAL
 /* ========================================== */
 
 const registros = new Map();
-const farms = new Map();
 
 const perguntas = [
-  "Digite seu **ID/Passaporte**\nExemplo: `937`\n(Apenas números)",
+  "Digite seu **ID/Passaporte**\nExemplo: `937`",
   "Digite seu **Telefone**\nExemplo: `333-333`",
   "Já participou de alguma facção antes?",
   "Quantas facções já participou?",
@@ -59,17 +61,17 @@ client.once("clientReady", () => {
   console.log(`Bot online: ${client.user.tag}`);
 });
 
-/* ================= PAINEL REGISTRO ================= */
+/* ================= MENSSAGENS ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  /* REGISTRO */
+  /* PAINEL REGISTRO */
   if (message.content === "!painel") {
     if (message.channel.id !== REGISTER_CHANNEL_ID) return;
 
     const embed = new EmbedBuilder()
       .setTitle("📋 Registro Facção")
-      .setDescription("Clique no botão abaixo para iniciar seu registro.")
+      .setDescription("Clique para iniciar registro.")
       .setColor("Blue");
 
     const row = new ActionRowBuilder().addComponents(
@@ -82,14 +84,13 @@ client.on("messageCreate", async (message) => {
     await message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* FARM */
+  /* FARM PAINEL */
   if (message.content === "!farm") {
     if (message.channel.id !== FARM_CHANNEL_ID) return;
 
     const embed = new EmbedBuilder()
-      .setTitle("Tropa da Leste | Painel de Farm")
-      .setDescription("Clique para abrir sua pasta de farm.")
-      .setThumbnail(message.guild.iconURL({ dynamic: true, size: 512 }))
+      .setTitle("Tropa da Leste | Farm")
+      .setDescription("Abra sua pasta de farm.")
       .setColor("Green");
 
     const row = new ActionRowBuilder().addComponents(
@@ -103,13 +104,13 @@ client.on("messageCreate", async (message) => {
     await message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* ================= AUSÊNCIA PAINEL ================= */
+  /* AUSÊNCIA PAINEL */
   if (message.content === "!ausencia") {
     if (message.channel.id !== ABSENCE_CHANNEL_ID) return;
 
     const embed = new EmbedBuilder()
       .setTitle("🚫 Ausência")
-      .setDescription("Clique no botão abaixo para iniciar formulário de ausência")
+      .setDescription("Clique abaixo para abrir formulário.")
       .setColor("Red");
 
     const row = new ActionRowBuilder().addComponents(
@@ -123,7 +124,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-/* ================= INTERACTIONS ================= */
+/* ================= INTERAÇÕES ================= */
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
@@ -157,6 +158,29 @@ client.on("interactionCreate", async (interaction) => {
     await canal.send(`${interaction.user}\n${perguntas[0]}`);
   }
 
+  /* ================= APROVAR REGISTRO ================= */
+  if (interaction.customId.startsWith("aprovar_")) {
+    const userId = interaction.customId.split("_")[1];
+
+    try {
+      const member = await interaction.guild.members.fetch(userId);
+
+      await member.roles.add(ROLE_ID); // ✔ CARGO AUTOMÁTICO
+
+      const embed = new EmbedBuilder()
+        .setTitle("Registro Aprovado")
+        .setColor("Green")
+        .setDescription(`${member} foi aprovado.`);
+
+      const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+      if (result) result.send({ embeds: [embed] });
+
+      await interaction.reply({ content: "Aprovado com sucesso!", flags: 64 });
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
   /* ================= FARM ================= */
   if (interaction.customId === "abrir_farm") {
     const guild = interaction.guild;
@@ -182,26 +206,24 @@ client.on("interactionCreate", async (interaction) => {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("fechar_farm")
-        .setLabel("Fechar Pasta")
-        .setEmoji("❌")
+        .setLabel("Fechar")
         .setStyle(ButtonStyle.Danger),
 
       new ButtonBuilder()
         .setCustomId("ver_metas")
-        .setLabel("Ver Metas")
-        .setEmoji("👁")
+        .setLabel("Metas")
         .setStyle(ButtonStyle.Primary)
     );
 
     await interaction.reply({ content: `Criado: ${canal}`, flags: 64 });
 
     await canal.send({
-      content: `${interaction.user} sua pasta foi criada.`,
+      content: `${interaction.user} pasta criada.`,
       components: [row]
     });
   }
 
-  /* ================= AUSÊNCIA MODAL ================= */
+  /* ================= AUSÊNCIA ================= */
   if (interaction.customId === "abrir_ausencia") {
     const modal = new ModalBuilder()
       .setCustomId("form_ausencia")
@@ -209,35 +231,34 @@ client.on("interactionCreate", async (interaction) => {
 
     const motivo = new TextInputBuilder()
       .setCustomId("motivo")
-      .setLabel("Motivo da ausência")
+      .setLabel("Motivo")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true);
 
     const dias = new TextInputBuilder()
       .setCustomId("dias")
-      .setLabel("Quantos dias?")
+      .setLabel("Dias")
       .setStyle(TextInputStyle.Short)
       .setRequired(true);
 
-    const row1 = new ActionRowBuilder().addComponents(motivo);
-    const row2 = new ActionRowBuilder().addComponents(dias);
-
-    modal.addComponents(row1, row2);
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(motivo),
+      new ActionRowBuilder().addComponents(dias)
+    );
 
     await interaction.showModal(modal);
   }
 
-  /* ================= ENVIAR AUSÊNCIA ================= */
+  /* ================= ENVIO AUSÊNCIA ================= */
   if (interaction.type === InteractionType.ModalSubmit) {
     if (interaction.customId === "form_ausencia") {
       const motivo = interaction.fields.getTextInputValue("motivo");
       const dias = interaction.fields.getTextInputValue("dias");
 
-      const staff = interaction.guild.channels.cache.get(STAFF_CHANNEL_ID);
-      const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
+      const log = interaction.guild.channels.cache.get(ABSENCE_LOG_CHANNEL_ID);
 
       const embed = new EmbedBuilder()
-        .setTitle("🚫 Nova Ausência")
+        .setTitle("Nova Ausência")
         .setColor("Red")
         .addFields(
           { name: "Usuário", value: interaction.user.tag },
@@ -245,36 +266,10 @@ client.on("interactionCreate", async (interaction) => {
           { name: "Dias", value: dias }
         );
 
-      await staff.send({ embeds: [embed] });
-      await log.send(`📋 Ausência registrada por ${interaction.user.tag}`);
+      if (log) await log.send({ embeds: [embed] });
 
-      await interaction.reply({
-        content: "Ausência enviada com sucesso!",
-        flags: 64
-      });
+      await interaction.reply({ content: "Enviado!", flags: 64 });
     }
-  }
-
-  /* FECHAR FARM */
-  if (interaction.customId === "fechar_farm") {
-    await interaction.reply({ content: "Fechando...", flags: 64 });
-    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
-  }
-
-  /* VER METAS */
-  if (interaction.customId === "ver_metas") {
-    const embed = new EmbedBuilder()
-      .setTitle("Tropa da Leste | Meta de Farm")
-      .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 512 }))
-      .setColor("Blue")
-      .addFields(
-        { name: "Frequência", value: "Semanal" },
-        { name: "Descrição", value: "Entregar em mãos para Braga" },
-        { name: "Quantidade", value: "450" },
-        { name: "Tipo", value: "Farinha de Trigo" }
-      );
-
-    await interaction.reply({ embeds: [embed], flags: 64 });
   }
 });
 
