@@ -29,6 +29,7 @@ const client = new Client({
 /* CONFIG */
 const STAFF_CHANNEL_ID = "1501578418834112554";
 const LOG_CHANNEL_ID = "1501628297056882820";
+const RESULT_CHANNEL_ID = "1501590299003064362";
 const ROLE_ID = "1501576591145173184";
 const REGISTER_CHANNEL_ID = "1501579466445422652";
 const CATEGORY_ID = "1501579361453871255";
@@ -102,7 +103,6 @@ client.on("messageCreate", async (message) => {
     });
 
     await message.channel.send("✅ Registro enviado para staff.");
-
     registros.delete(message.author.id);
 
     setTimeout(() => {
@@ -129,7 +129,7 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* PAINEL FARM */
+  /* FARM */
   if (message.content === "!farm" && message.channel.id === FARM_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("Tropa da Leste | Farm")
@@ -147,11 +147,11 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* PAINEL AUSENCIA */
+  /* AUSENCIA */
   if (message.content === "!ausencia" && message.channel.id === ABSENCE_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("🚫 Ausência")
-      .setDescription("Clique abaixo para abrir formulário")
+      .setDescription("Clique abaixo")
       .setColor("Red");
 
     const row = new ActionRowBuilder().addComponents(
@@ -208,11 +208,17 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId.startsWith("aprovar_")) {
     const userId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(userId);
+
     const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
+    const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
     await membro.roles.add(ROLE_ID);
 
     await log.send(`✅ ${membro.user.tag} foi aprovado no registro.`);
+
+    await result.send(
+      `🎉 | Olá <@${userId}> (${membro.user.username}), seu registro foi **APROVADO**! Bem-vindo à facção.`
+    );
 
     return interaction.reply({
       content: `✅ Registro aprovado e cargo aplicado em ${membro.user.tag}`
@@ -222,12 +228,19 @@ client.on("interactionCreate", async (interaction) => {
   /* RECUSAR */
   if (interaction.customId.startsWith("recusar_")) {
     const userId = interaction.customId.split("_")[1];
-    const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
+    const membro = await interaction.guild.members.fetch(userId);
 
-    await log.send(`❌ <@${userId}> teve registro recusado.`);
+    const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
+    const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+
+    await log.send(`❌ ${membro.user.tag} teve registro recusado.`);
+
+    await result.send(
+      `❌ | Olá <@${userId}> (${membro.user.username}), seu registro foi **RECUSADO**. Fale com a liderança para mais informações.`
+    );
 
     return interaction.reply({
-      content: `❌ Registro recusado <@${userId}>`
+      content: `❌ Registro recusado ${membro.user.tag}`
     });
   }
 
@@ -282,7 +295,7 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  /* ABRIR FARM */
+  /* FARM */
   if (interaction.customId === "abrir_farm") {
     const canal = await interaction.guild.channels.create({
       name: `farm-${interaction.user.username}`,
@@ -334,19 +347,11 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  /* FECHAR FARM */
   if (interaction.customId === "fechar_farm") {
-    await interaction.reply({
-      content: "Fechando...",
-      ephemeral: true
-    });
-
-    setTimeout(() => {
-      interaction.channel.delete().catch(() => {});
-    }, 3000);
+    await interaction.reply({ content: "Fechando...", ephemeral: true });
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
   }
 
-  /* VER METAS */
   if (interaction.customId === "ver_metas") {
     const embed = new EmbedBuilder()
       .setTitle("📦 Meta Farm")
