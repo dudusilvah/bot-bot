@@ -12,8 +12,7 @@ const {
   PermissionsBitField,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle,
-  InteractionType
+  TextInputStyle
 } = require("discord.js");
 
 const client = new Client({
@@ -56,7 +55,7 @@ client.once("ready", () => {
   console.log(`Bot online: ${client.user.tag}`);
 });
 
-/* ================= MESSAGE CREATE ================= */
+/* MESSAGE CREATE */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -129,7 +128,7 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* FARM */
+  /* PAINEL FARM */
   if (message.content === "!farm" && message.channel.id === FARM_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("Tropa da Leste | Farm")
@@ -147,11 +146,11 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* AUSENCIA */
+  /* PAINEL AUSENCIA */
   if (message.content === "!ausencia" && message.channel.id === ABSENCE_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("🚫 Ausência")
-      .setDescription("Clique abaixo")
+      .setDescription("Clique abaixo para abrir formulário")
       .setColor("Red");
 
     const row = new ActionRowBuilder().addComponents(
@@ -165,7 +164,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-/* ================= INTERACTIONS ================= */
+/* INTERACTIONS */
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
@@ -208,20 +207,22 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId.startsWith("aprovar_")) {
     const userId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(userId);
-
-    const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
     const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
     await membro.roles.add(ROLE_ID);
 
-    await log.send(`✅ ${membro.user.tag} foi aprovado no registro.`);
-
     await result.send(
-      `🎉 | Olá <@${userId}> (${membro.user.username}), seu registro foi **APROVADO**! Bem-vindo à facção.`
+      `🎉 | <@${userId}> (${membro.user.username}) seu registro foi **APROVADO**! Bem-vindo à facção.`
     );
 
-    return interaction.reply({
-      content: `✅ Registro aprovado e cargo aplicado em ${membro.user.tag}`
+    const disabledRow = new ActionRowBuilder().addComponents(
+      ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true),
+      ButtonBuilder.from(interaction.message.components[0].components[1]).setDisabled(true)
+    );
+
+    await interaction.update({
+      content: `✅ ${membro.user.tag} aprovado com sucesso.`,
+      components: [disabledRow]
     });
   }
 
@@ -229,18 +230,20 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId.startsWith("recusar_")) {
     const userId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(userId);
-
-    const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
     const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
-    await log.send(`❌ ${membro.user.tag} teve registro recusado.`);
-
     await result.send(
-      `❌ | Olá <@${userId}> (${membro.user.username}), seu registro foi **RECUSADO**. Fale com a liderança para mais informações.`
+      `❌ | <@${userId}> (${membro.user.username}) seu registro foi **RECUSADO**. Fale com a liderança para mais informações.`
     );
 
-    return interaction.reply({
-      content: `❌ Registro recusado ${membro.user.tag}`
+    const disabledRow = new ActionRowBuilder().addComponents(
+      ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true),
+      ButtonBuilder.from(interaction.message.components[0].components[1]).setDisabled(true)
+    );
+
+    await interaction.update({
+      content: `❌ ${membro.user.tag} recusado.`,
+      components: [disabledRow]
     });
   }
 
@@ -269,10 +272,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   /* ENVIAR AUSENCIA */
-  if (
-    interaction.type === InteractionType.ModalSubmit &&
-    interaction.customId === "form_ausencia"
-  ) {
+  if (interaction.isModalSubmit() && interaction.customId === "form_ausencia") {
     const motivo = interaction.fields.getTextInputValue("motivo");
     const dias = interaction.fields.getTextInputValue("dias");
 
@@ -295,32 +295,17 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  /* FARM */
+  /* ABRIR FARM */
   if (interaction.customId === "abrir_farm") {
     const canal = await interaction.guild.channels.create({
       name: `farm-${interaction.user.username}`,
       type: ChannelType.GuildText,
       parent: FARM_CATEGORY_ID,
       permissionOverwrites: [
-        {
-          id: interaction.guild.id,
-          deny: [PermissionsBitField.Flags.ViewChannel]
-        },
-        {
-          id: interaction.user.id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages
-          ]
-        },
-        {
-          id: FARM_MANAGER_ROLE,
-          allow: [PermissionsBitField.Flags.ViewChannel]
-        },
-        {
-          id: FARM_BOSS_ROLE,
-          allow: [PermissionsBitField.Flags.ViewChannel]
-        }
+        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+        { id: FARM_MANAGER_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] },
+        { id: FARM_BOSS_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] }
       ]
     });
 
