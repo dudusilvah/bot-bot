@@ -61,7 +61,6 @@ client.on("messageCreate", async (message) => {
 
   const registro = registros.get(message.author.id);
 
-  /* RESPOSTAS REGISTRO */
   if (registro && message.channel.id === registro.canalId) {
     registro.respostas.push(message.content);
     registro.etapa++;
@@ -111,7 +110,6 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  /* PAINEL REGISTRO */
   if (message.content === "!painel" && message.channel.id === REGISTER_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("📋 Registro Facção")
@@ -122,41 +120,6 @@ client.on("messageCreate", async (message) => {
       new ButtonBuilder()
         .setCustomId("iniciar_registro")
         .setLabel("Iniciar Registro")
-        .setStyle(ButtonStyle.Success)
-    );
-
-    return message.channel.send({ embeds: [embed], components: [row] });
-  }
-
-  /* PAINEL FARM */
-  if (message.content === "!farm" && message.channel.id === FARM_CHANNEL_ID) {
-    const embed = new EmbedBuilder()
-      .setTitle("Tropa da Leste | Farm")
-      .setDescription("Clique abaixo para abrir pasta")
-      .setColor("Green");
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("abrir_farm")
-        .setLabel("Abrir Pasta")
-        .setEmoji("📁")
-        .setStyle(ButtonStyle.Success)
-    );
-
-    return message.channel.send({ embeds: [embed], components: [row] });
-  }
-
-  /* PAINEL AUSENCIA */
-  if (message.content === "!ausencia" && message.channel.id === ABSENCE_CHANNEL_ID) {
-    const embed = new EmbedBuilder()
-      .setTitle("🚫 Ausência")
-      .setDescription("Clique abaixo para abrir formulário")
-      .setColor("Red");
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("abrir_ausencia")
-        .setLabel("Ausência")
         .setStyle(ButtonStyle.Success)
     );
 
@@ -205,49 +168,73 @@ client.on("interactionCreate", async (interaction) => {
 
   /* APROVAR */
   if (interaction.customId.startsWith("aprovar_")) {
-    const userId = interaction.customId.split("_")[1];
-    const membro = await interaction.guild.members.fetch(userId);
-    const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+    await interaction.deferReply({ ephemeral: true });
 
-    await membro.roles.add(ROLE_ID);
+    try {
+      const userId = interaction.customId.split("_")[1];
+      const membro = await interaction.guild.members.fetch(userId);
+      const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
-    await result.send(
-      `🎉 | <@${userId}> (${membro.user.username}) seu registro foi **APROVADO**! Bem-vindo à facção.`
-    );
+      if (!membro) {
+        return interaction.editReply("Usuário não encontrado.");
+      }
 
-    const disabledRow = new ActionRowBuilder().addComponents(
-      ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true),
-      ButtonBuilder.from(interaction.message.components[0].components[1]).setDisabled(true)
-    );
+      await membro.roles.add(ROLE_ID);
 
-    await interaction.update({
-      content: `✅ ${membro.user.tag} aprovado com sucesso.`,
-      components: [disabledRow]
-    });
+      await result.send(
+        `🎉 | Olá <@${userId}> (${membro.user.username}), seu registro foi **APROVADO**! Seja bem-vindo à facção.`
+      );
+
+      const disabledRow = new ActionRowBuilder().addComponents(
+        ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true),
+        ButtonBuilder.from(interaction.message.components[0].components[1]).setDisabled(true)
+      );
+
+      await interaction.message.edit({
+        components: [disabledRow]
+      });
+
+      await interaction.editReply(
+        `✅ ${membro.user.tag} aprovado com sucesso e cargo aplicado.`
+      );
+    } catch (error) {
+      console.log(error);
+      await interaction.editReply(
+        "Erro ao aprovar. Verifique se o cargo do bot está acima do cargo que ele vai adicionar."
+      );
+    }
   }
 
   /* RECUSAR */
   if (interaction.customId.startsWith("recusar_")) {
-    const userId = interaction.customId.split("_")[1];
-    const membro = await interaction.guild.members.fetch(userId);
-    const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+    await interaction.deferReply({ ephemeral: true });
 
-    await result.send(
-      `❌ | <@${userId}> (${membro.user.username}) seu registro foi **RECUSADO**. Fale com a liderança para mais informações.`
-    );
+    try {
+      const userId = interaction.customId.split("_")[1];
+      const membro = await interaction.guild.members.fetch(userId);
+      const result = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
 
-    const disabledRow = new ActionRowBuilder().addComponents(
-      ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true),
-      ButtonBuilder.from(interaction.message.components[0].components[1]).setDisabled(true)
-    );
+      await result.send(
+        `❌ | Olá <@${userId}> (${membro.user.username}), seu registro foi **RECUSADO**.\nNão desanime. Revise melhor os detalhes do formulário e tente novamente futuramente.`
+      );
 
-    await interaction.update({
-      content: `❌ ${membro.user.tag} recusado.`,
-      components: [disabledRow]
-    });
+      const disabledRow = new ActionRowBuilder().addComponents(
+        ButtonBuilder.from(interaction.message.components[0].components[0]).setDisabled(true),
+        ButtonBuilder.from(interaction.message.components[0].components[1]).setDisabled(true)
+      );
+
+      await interaction.message.edit({
+        components: [disabledRow]
+      });
+
+      await interaction.editReply(`❌ ${membro.user.tag} recusado.`);
+    } catch (error) {
+      console.log(error);
+      await interaction.editReply("Erro ao recusar.");
+    }
   }
 
-  /* ABRIR AUSENCIA */
+  /* AUSENCIA */
   if (interaction.customId === "abrir_ausencia") {
     const modal = new ModalBuilder()
       .setCustomId("form_ausencia")
@@ -271,7 +258,6 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  /* ENVIAR AUSENCIA */
   if (interaction.isModalSubmit() && interaction.customId === "form_ausencia") {
     const motivo = interaction.fields.getTextInputValue("motivo");
     const dias = interaction.fields.getTextInputValue("dias");
@@ -291,63 +277,6 @@ client.on("interactionCreate", async (interaction) => {
 
     return interaction.reply({
       content: "✅ Ausência enviada",
-      ephemeral: true
-    });
-  }
-
-  /* ABRIR FARM */
-  if (interaction.customId === "abrir_farm") {
-    const canal = await interaction.guild.channels.create({
-      name: `farm-${interaction.user.username}`,
-      type: ChannelType.GuildText,
-      parent: FARM_CATEGORY_ID,
-      permissionOverwrites: [
-        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-        { id: FARM_MANAGER_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] },
-        { id: FARM_BOSS_ROLE, allow: [PermissionsBitField.Flags.ViewChannel] }
-      ]
-    });
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("fechar_farm")
-        .setLabel("Fechar Pasta")
-        .setStyle(ButtonStyle.Danger),
-
-      new ButtonBuilder()
-        .setCustomId("ver_metas")
-        .setLabel("Ver Metas")
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    await interaction.reply({
-      content: `Criado: ${canal}`,
-      ephemeral: true
-    });
-
-    await canal.send({
-      content: `${interaction.user}`,
-      components: [row]
-    });
-  }
-
-  if (interaction.customId === "fechar_farm") {
-    await interaction.reply({ content: "Fechando...", ephemeral: true });
-    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
-  }
-
-  if (interaction.customId === "ver_metas") {
-    const embed = new EmbedBuilder()
-      .setTitle("📦 Meta Farm")
-      .setColor("Blue")
-      .addFields(
-        { name: "Quantidade", value: "450" },
-        { name: "Item", value: "Farinha de Trigo" }
-      );
-
-    return interaction.reply({
-      embeds: [embed],
       ephemeral: true
     });
   }
