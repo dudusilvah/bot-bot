@@ -44,24 +44,24 @@ const ABSENCE_LOG_CHANNEL_ID = "1501781507235119135";
 const registros = new Map();
 
 const perguntas = [
-  "Digite seu **ID/Passaporte**",
-  "Digite seu **Telefone**",
-  "Já participou de alguma facção antes?",
-  "Quantas facções já participou?",
-  "Quem te recrutou?"
+  "Digite seu **ID/Passaporte**\nExemplo: `937`",
+  "Digite seu **Telefone**\nExemplo: `333-333`",
+  "Já participou de alguma facção antes?\nExemplo: `sim` ou `não`",
+  "Quantas facções já participou?\nExemplo: `2`",
+  "Quem te recrutou?\nExemplo: `Braga`"
 ];
 
 client.once("ready", () => {
   console.log(`Bot online: ${client.user.tag}`);
 });
 
-/* MENSAGENS */
+/* ================= MESSAGE CREATE ================= */
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  /* SISTEMA DE RESPOSTAS REGISTRO */
   const registro = registros.get(message.author.id);
 
+  /* RESPOSTAS REGISTRO */
   if (registro && message.channel.id === registro.canalId) {
     registro.respostas.push(message.content);
     registro.etapa++;
@@ -70,7 +70,6 @@ client.on("messageCreate", async (message) => {
       return message.channel.send(perguntas[registro.etapa]);
     }
 
-    /* FINALIZOU */
     const staff = message.guild.channels.cache.get(STAFF_CHANNEL_ID);
 
     const embed = new EmbedBuilder()
@@ -103,6 +102,7 @@ client.on("messageCreate", async (message) => {
     });
 
     await message.channel.send("✅ Registro enviado para staff.");
+
     registros.delete(message.author.id);
 
     setTimeout(() => {
@@ -116,7 +116,7 @@ client.on("messageCreate", async (message) => {
   if (message.content === "!painel" && message.channel.id === REGISTER_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("📋 Registro Facção")
-      .setDescription("Clique para iniciar registro")
+      .setDescription("Clique abaixo para iniciar seu registro")
       .setColor("Blue");
 
     const row = new ActionRowBuilder().addComponents(
@@ -129,11 +129,11 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* FARM */
+  /* PAINEL FARM */
   if (message.content === "!farm" && message.channel.id === FARM_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("Tropa da Leste | Farm")
-      .setDescription("Clique para abrir pasta")
+      .setDescription("Clique abaixo para abrir pasta")
       .setColor("Green");
 
     const row = new ActionRowBuilder().addComponents(
@@ -147,11 +147,11 @@ client.on("messageCreate", async (message) => {
     return message.channel.send({ embeds: [embed], components: [row] });
   }
 
-  /* AUSENCIA */
+  /* PAINEL AUSENCIA */
   if (message.content === "!ausencia" && message.channel.id === ABSENCE_CHANNEL_ID) {
     const embed = new EmbedBuilder()
       .setTitle("🚫 Ausência")
-      .setDescription("Clique abaixo")
+      .setDescription("Clique abaixo para abrir formulário")
       .setColor("Red");
 
     const row = new ActionRowBuilder().addComponents(
@@ -165,7 +165,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-/* INTERACTIONS */
+/* ================= INTERACTIONS ================= */
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
@@ -208,10 +208,13 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId.startsWith("aprovar_")) {
     const userId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(userId);
+    const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
 
     await membro.roles.add(ROLE_ID);
 
-    await interaction.reply({
+    await log.send(`✅ ${membro.user.tag} foi aprovado no registro.`);
+
+    return interaction.reply({
       content: `✅ Registro aprovado e cargo aplicado em ${membro.user.tag}`
     });
   }
@@ -219,8 +222,11 @@ client.on("interactionCreate", async (interaction) => {
   /* RECUSAR */
   if (interaction.customId.startsWith("recusar_")) {
     const userId = interaction.customId.split("_")[1];
+    const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
 
-    await interaction.reply({
+    await log.send(`❌ <@${userId}> teve registro recusado.`);
+
+    return interaction.reply({
       content: `❌ Registro recusado <@${userId}>`
     });
   }
@@ -276,12 +282,33 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  /* FARM */
+  /* ABRIR FARM */
   if (interaction.customId === "abrir_farm") {
     const canal = await interaction.guild.channels.create({
       name: `farm-${interaction.user.username}`,
       type: ChannelType.GuildText,
-      parent: FARM_CATEGORY_ID
+      parent: FARM_CATEGORY_ID,
+      permissionOverwrites: [
+        {
+          id: interaction.guild.id,
+          deny: [PermissionsBitField.Flags.ViewChannel]
+        },
+        {
+          id: interaction.user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages
+          ]
+        },
+        {
+          id: FARM_MANAGER_ROLE,
+          allow: [PermissionsBitField.Flags.ViewChannel]
+        },
+        {
+          id: FARM_BOSS_ROLE,
+          allow: [PermissionsBitField.Flags.ViewChannel]
+        }
+      ]
     });
 
     const row = new ActionRowBuilder().addComponents(
@@ -307,23 +334,33 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
+  /* FECHAR FARM */
   if (interaction.customId === "fechar_farm") {
-    await interaction.reply({ content: "Fechando...", ephemeral: true });
-    setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+    await interaction.reply({
+      content: "Fechando...",
+      ephemeral: true
+    });
+
+    setTimeout(() => {
+      interaction.channel.delete().catch(() => {});
+    }, 3000);
   }
 
+  /* VER METAS */
   if (interaction.customId === "ver_metas") {
     const embed = new EmbedBuilder()
-      .setTitle("Meta Farm")
+      .setTitle("📦 Meta Farm")
       .setColor("Blue")
       .addFields(
         { name: "Quantidade", value: "450" },
         { name: "Item", value: "Farinha de Trigo" }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({
+      embeds: [embed],
+      ephemeral: true
+    });
   }
 });
 
 client.login(process.env.TOKEN);
-// teste
