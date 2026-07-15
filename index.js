@@ -31,7 +31,7 @@ const RESULT_CHANNEL_ID = "1501590299003064362";
 const STAFF_ROLE_1 = "1501576408663851088";
 const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
-const DONO_ID = "616758567491600411";   // ← Apenas essa pessoa pode usar o comando
+const DONO_ID = "616758567491600411";
 
 const registros = new Map();
 
@@ -50,22 +50,12 @@ client.once("ready", async () => {
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
 
-  // ==================== COMANDO /registro ====================
   if (interaction.isCommand() && interaction.commandName === "registro") {
-    
-    // Bloqueia se não for o dono
     if (interaction.user.id !== DONO_ID) {
-      return interaction.reply({ 
-        content: "❌ Você não tem permissão para usar este comando.", 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: "❌ Você não tem permissão.", ephemeral: true });
     }
-
     if (interaction.channel.id !== REGISTER_CHANNEL_ID) {
-      return interaction.reply({ 
-        content: "❌ Esse comando só pode ser usado no canal de registro.", 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: "❌ Use este comando no canal correto.", ephemeral: true });
     }
 
     const embed = new EmbedBuilder()
@@ -83,7 +73,6 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // ==================== BOTÃO INICIAR REGISTRO ====================
   if (interaction.isButton() && interaction.customId === "iniciar_registro") {
     const user = interaction.user;
 
@@ -109,10 +98,16 @@ client.on("interactionCreate", async (interaction) => {
 
     await interaction.reply({ content: `✅ Canal de registro criado: ${canal}`, ephemeral: true });
 
-    const welcome = `👋 Bem-vindo ao Registro da **TDL (Tropa Da Leste)**!\n\n` +
-      `Seja muito bem-vindo ao registro da TDL – Tropa Da Leste!\n` +
-      `Somos uma família do SAMP Underground...\n\n` +
-      `📋 **Como fazer seu registro**\nResponda neste chat todas as perguntas com atenção e sinceridade.\n\nBoa sorte! 🖤`;
+    // NOVO TEXTO DE BOAS-VINDAS
+    const welcome = `🏴 **A História da TDL – Tropa Da Leste**\n\n` +
+      `A TDL (Tropa Da Leste) é mais do que uma simples família dentro do SAMP Underground. Somos uma comunidade construída sobre lealdade, respeito, união, comprometimento e confiança.\n\n` +
+      `Nossa história começou há muito tempo, quando éramos conhecidos como Dark Thunder. Naquela época, conquistamos nosso espaço e escrevemos uma das páginas mais marcantes do Underground. Com muito esforço e dedicação de todos os membros, chegamos a reunir mais de 80 integrantes ativos, tornando-nos uma das famílias mais fortes e respeitadas do servidor.\n\n` +
+      `Esse período aconteceu quando o Underground havia acabado de completar 1 ano de existência e alcançava cerca de 700 jogadores online diariamente. Foram tempos de grandes batalhas, amizades, conquistas e momentos que marcaram todos que fizeram parte da nossa trajetória.\n\n` +
+      `Com o passar dos anos, muita coisa mudou. Alguns seguiram novos caminhos, outros permaneceram, mas a essência da nossa família nunca desapareceu.\n\n` +
+      `Hoje retornamos com nossa identidade definitiva: **TDL – Tropa Da Leste**.\n\n` +
+      `Nosso objetivo não é sermos apenas a maior família do servidor, mas sim construir uma família formada por pessoas leais, ativas, respeitosas, comprometidas, organizadas e dispostas a crescer juntas.\n\n` +
+      `Estamos escrevendo um novo capítulo da nossa história, e queremos que você faça parte dele.\n\n` +
+      `Seja muito bem-vindo à **TDL – Tropa Da Leste**. Aqui, a união sempre vem em primeiro lugar. 🖤`;
 
     await canal.send(welcome);
     await canal.send("**Qual seu nome dentro do Underground?**");
@@ -153,8 +148,15 @@ client.on("messageCreate", async (message) => {
         return message.channel.send("❌ Responda apenas `sim` ou `não`:");
       }
       respostas[3] = resp;
-      registro.etapa++;
-      return message.channel.send("**Quantas facções você já participou?** (Apenas números)");
+
+      if (resp === "não") {
+        respostas[4] = "0";
+        registro.etapa = 5;
+        return message.channel.send("**Qual o nome da pessoa que te recrutou?**");
+      } else {
+        registro.etapa++;
+        return message.channel.send("**Quantas facções você já participou?** (Apenas números)");
+      }
 
     case 4:
       if (!/^\d+$/.test(message.content)) {
@@ -177,7 +179,7 @@ client.on("messageCreate", async (message) => {
           { name: "Apelido", value: respostas[1] },
           { name: "Número", value: respostas[2] },
           { name: "Já participou?", value: respostas[3] },
-          { name: "Quantas facções?", value: respostas[4] },
+          { name: "Quantas facções?", value: respostas[4] || "0" },
           { name: "Recrutador", value: respostas[5] }
         );
 
@@ -209,7 +211,7 @@ client.on("interactionCreate", async (interaction) => {
         { name: "Apelido", value: registro.respostas[1] },
         { name: "Número", value: registro.respostas[2] },
         { name: "Já participou?", value: registro.respostas[3] },
-        { name: "Quantas facções?", value: registro.respostas[4] },
+        { name: "Quantas facções?", value: registro.respostas[4] || "0" },
         { name: "Recrutador", value: registro.respostas[5] }
       );
 
@@ -231,6 +233,32 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId === "cancelar_registro") {
     await interaction.channel.delete().catch(() => {});
     registros.delete(userId);
+  }
+
+  // Aprovar
+  if (interaction.customId.startsWith("aprovar_")) {
+    const targetId = interaction.customId.split("_")[1];
+    const membro = await interaction.guild.members.fetch(targetId).catch(() => null);
+    if (!membro) return interaction.reply({ content: "Usuário não encontrado.", ephemeral: true });
+
+    const reg = registros.get(targetId) || { respostas: [] };
+
+    await membro.setNickname(reg.respostas[1] || membro.user.username).catch(() => {});
+    await membro.roles.add(MEMBER_ROLE).catch(() => {});
+
+    const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+    await resultChannel.send(`🎉 | Olá <@${targetId}>, seu registro foi **APROVADO**!\nSeja bem-vindo à **TDL**!`);
+
+    await interaction.reply({ content: `✅ ${membro.user.tag} aprovado com sucesso!`, ephemeral: true });
+  }
+
+  // Recusar
+  if (interaction.customId.startsWith("recusar_")) {
+    const targetId = interaction.customId.split("_")[1];
+    const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+    await resultChannel.send(`❌ | Olá <@${targetId}>, seu registro foi **RECUSADO**.\nNão desanime. Revise melhor os detalhes e tente novamente futuramente.`);
+
+    await interaction.reply({ content: `❌ Registro recusado.`, ephemeral: true });
   }
 });
 
