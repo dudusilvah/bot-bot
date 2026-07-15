@@ -31,6 +31,7 @@ const RESULT_CHANNEL_ID = "1501590299003064362";
 const STAFF_ROLE_1 = "1501576408663851088";
 const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
+const DONO_ID = "616758567491600411";   // ← Apenas essa pessoa pode usar o comando
 
 const registros = new Map();
 
@@ -43,16 +44,28 @@ client.once("ready", async () => {
     .setDescription("Inicia o painel de registro da facção");
 
   await client.application.commands.create(comando);
-  console.log("✅ Comando /registro registrado com sucesso!");
+  console.log("✅ Comando /registro registrado!");
 });
 
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
 
-  // Comando /registro
+  // ==================== COMANDO /registro ====================
   if (interaction.isCommand() && interaction.commandName === "registro") {
+    
+    // Bloqueia se não for o dono
+    if (interaction.user.id !== DONO_ID) {
+      return interaction.reply({ 
+        content: "❌ Você não tem permissão para usar este comando.", 
+        ephemeral: true 
+      });
+    }
+
     if (interaction.channel.id !== REGISTER_CHANNEL_ID) {
-      return interaction.reply({ content: "❌ Esse comando só pode ser usado no canal de registro.", ephemeral: true });
+      return interaction.reply({ 
+        content: "❌ Esse comando só pode ser usado no canal de registro.", 
+        ephemeral: true 
+      });
     }
 
     const embed = new EmbedBuilder()
@@ -70,7 +83,7 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // Botão "Iniciar Registro"
+  // ==================== BOTÃO INICIAR REGISTRO ====================
   if (interaction.isButton() && interaction.customId === "iniciar_registro") {
     const user = interaction.user;
 
@@ -98,10 +111,8 @@ client.on("interactionCreate", async (interaction) => {
 
     const welcome = `👋 Bem-vindo ao Registro da **TDL (Tropa Da Leste)**!\n\n` +
       `Seja muito bem-vindo ao registro da TDL – Tropa Da Leste!\n` +
-      `Somos uma família do SAMP Underground, construída com base na união, respeito, lealdade e trabalho em equipe.\n\n` +
-      `📋 **Como fazer seu registro**\n` +
-      `Responda neste chat todas as perguntas do formulário com atenção e sinceridade.\n\n` +
-      `Boa sorte no seu registro, e esperamos ver você fazendo parte da Tropa Da Leste em breve! 🖤`;
+      `Somos uma família do SAMP Underground...\n\n` +
+      `📋 **Como fazer seu registro**\nResponda neste chat todas as perguntas com atenção e sinceridade.\n\nBoa sorte! 🖤`;
 
     await canal.send(welcome);
     await canal.send("**Qual seu nome dentro do Underground?**");
@@ -186,7 +197,6 @@ client.on("interactionCreate", async (interaction) => {
   const userId = interaction.user.id;
   const registro = registros.get(userId);
 
-  // Enviar para Staff
   if (interaction.customId === "enviar_registro" && registro) {
     const staffChannel = interaction.guild.channels.cache.get(STAFF_CHANNEL_ID);
 
@@ -218,7 +228,6 @@ client.on("interactionCreate", async (interaction) => {
     }, 15000);
   }
 
-  // Cancelar
   if (interaction.customId === "cancelar_registro") {
     await interaction.channel.delete().catch(() => {});
     registros.delete(userId);
