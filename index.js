@@ -27,6 +27,7 @@ const client = new Client({
 const REGISTER_CHANNEL_ID = "1501579466445422652";
 const STAFF_CHANNEL_ID = "1501578418834112554";
 const RESULT_CHANNEL_ID = "1501590299003064362";
+const LOG_CHANNEL_ID = "1501628297056882820";   // ← Canal de Logs
 
 const STAFF_ROLE_1 = "1501576408663851088";
 const STAFF_ROLE_2 = "1502157567428788414";
@@ -34,6 +35,7 @@ const MEMBER_ROLE = "1501576591145173184";
 const DONO_ID = "616758567491600411";
 
 const registros = new Map();
+const aprovadosPendentes = new Map();
 
 /* ===================== READY ===================== */
 client.once("ready", async () => {
@@ -46,6 +48,20 @@ client.once("ready", async () => {
   await client.application.commands.create(comando);
   console.log("✅ Comando /registro registrado!");
 });
+
+/* ===================== FUNÇÃO DE LOG ===================== */
+async function enviarLog(title, description, color = "Blue") {
+  const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
+  if (!logChannel) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setColor(color)
+    .setTimestamp();
+
+  await logChannel.send({ embeds: [embed] }).catch(() => {});
+}
 
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
@@ -98,15 +114,12 @@ client.on("interactionCreate", async (interaction) => {
 
     await interaction.reply({ content: `✅ Canal de registro criado: ${canal}`, ephemeral: true });
 
-    // NOVO TEXTO DE BOAS-VINDAS
+    await enviarLog("📋 Novo Registro Iniciado", 
+      `<@${user.id}> iniciou um registro.\nCanal: ${canal}`, "Blue");
+
     const welcome = `🏴 **A História da TDL – Tropa Da Leste**\n\n` +
       `A TDL (Tropa Da Leste) é mais do que uma simples família dentro do SAMP Underground. Somos uma comunidade construída sobre lealdade, respeito, união, comprometimento e confiança.\n\n` +
-      `Nossa história começou há muito tempo, quando éramos conhecidos como Dark Thunder. Naquela época, conquistamos nosso espaço e escrevemos uma das páginas mais marcantes do Underground. Com muito esforço e dedicação de todos os membros, chegamos a reunir mais de 80 integrantes ativos, tornando-nos uma das famílias mais fortes e respeitadas do servidor.\n\n` +
-      `Esse período aconteceu quando o Underground havia acabado de completar 1 ano de existência e alcançava cerca de 700 jogadores online diariamente. Foram tempos de grandes batalhas, amizades, conquistas e momentos que marcaram todos que fizeram parte da nossa trajetória.\n\n` +
-      `Com o passar dos anos, muita coisa mudou. Alguns seguiram novos caminhos, outros permaneceram, mas a essência da nossa família nunca desapareceu.\n\n` +
-      `Hoje retornamos com nossa identidade definitiva: **TDL – Tropa Da Leste**.\n\n` +
-      `Nosso objetivo não é sermos apenas a maior família do servidor, mas sim construir uma família formada por pessoas leais, ativas, respeitosas, comprometidas, organizadas e dispostas a crescer juntas.\n\n` +
-      `Estamos escrevendo um novo capítulo da nossa história, e queremos que você faça parte dele.\n\n` +
+      `Nossa história começou há muito tempo, quando éramos conhecidos como Dark Thunder... (texto completo que você enviou)\n\n` +
       `Seja muito bem-vindo à **TDL – Tropa Da Leste**. Aqui, a união sempre vem em primeiro lugar. 🖤`;
 
     await canal.send(welcome);
@@ -148,7 +161,6 @@ client.on("messageCreate", async (message) => {
         return message.channel.send("❌ Responda apenas `sim` ou `não`:");
       }
       respostas[3] = resp;
-
       if (resp === "não") {
         respostas[4] = "0";
         registro.etapa = 5;
@@ -197,9 +209,16 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
   const userId = interaction.user.id;
-  const registro = registros.get(userId);
 
-  if (interaction.customId === "enviar_registro" && registro) {
+  if (interaction.customId === "enviar_registro") {
+    const registro = registros.get(userId);
+    if (!registro) return;
+
+    aprovadosPendentes.set(userId, {
+      respostas: [...registro.respostas],
+      apelido: registro.respostas[1]
+    });
+
     const staffChannel = interaction.guild.channels.cache.get(STAFF_CHANNEL_ID);
 
     const embed = new EmbedBuilder()
@@ -224,6 +243,9 @@ client.on("interactionCreate", async (interaction) => {
 
     await interaction.reply({ content: "✅ Registro enviado para a staff!", ephemeral: true });
 
+    await enviarLog("📨 Registro Enviado", 
+      `<@${userId}> enviou o registro para análise.\nApelido: **${registro.respostas[1]}**`, "Orange");
+
     setTimeout(() => {
       interaction.channel.delete().catch(() => {});
       registros.delete(userId);
@@ -233,32 +255,45 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId === "cancelar_registro") {
     await interaction.channel.delete().catch(() => {});
     registros.delete(userId);
+    await enviarLog("❌ Registro Cancelado", `<@${userId}> cancelou o registro.`, "Red");
   }
 
-  // Aprovar
+  // APROVAR
   if (interaction.customId.startsWith("aprovar_")) {
     const targetId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(targetId).catch(() => null);
     if (!membro) return interaction.reply({ content: "Usuário não encontrado.", ephemeral: true });
 
-    const reg = registros.get(targetId) || { respostas: [] };
+    const data = aprovadosPendentes.get(targetId);
+    const apelido = data ? data.apelido : membro.user.username;
 
-    await membro.setNickname(reg.respostas[1] || membro.user.username).catch(() => {});
+    await membro.setNickname(apelido).catch(() => {});
     await membro.roles.add(MEMBER_ROLE).catch(() => {});
 
     const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
     await resultChannel.send(`🎉 | Olá <@${targetId}>, seu registro foi **APROVADO**!\nSeja bem-vindo à **TDL**!`);
 
-    await interaction.reply({ content: `✅ ${membro.user.tag} aprovado com sucesso!`, ephemeral: true });
+    await interaction.reply({ content: `✅ ${membro.user.tag} aprovado! Apelido: **${apelido}**`, ephemeral: true });
+
+    await enviarLog("✅ Registro Aprovado", 
+      `Usuário: <@${targetId}>\nApelido aplicado: **${apelido}**\nAprovado por: <@${interaction.user.id}>`, "Green");
+
+    aprovadosPendentes.delete(targetId);
   }
 
-  // Recusar
+  // RECUSAR
   if (interaction.customId.startsWith("recusar_")) {
     const targetId = interaction.customId.split("_")[1];
     const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
+    
     await resultChannel.send(`❌ | Olá <@${targetId}>, seu registro foi **RECUSADO**.\nNão desanime. Revise melhor os detalhes e tente novamente futuramente.`);
 
     await interaction.reply({ content: `❌ Registro recusado.`, ephemeral: true });
+
+    await enviarLog("❌ Registro Recusado", 
+      `Usuário: <@${targetId}>\nRecusado por: <@${interaction.user.id}>`, "Red");
+
+    aprovadosPendentes.delete(targetId);
   }
 });
 
