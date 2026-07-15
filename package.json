@@ -11,7 +11,15 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "discord.js": "^14.26.4",
+    "discord.js": "^14.27.0",
     "dotenv": "^17.4.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dudusilvah/bot-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dudusilvah/bot-bot/issues"
+  },
+  "homepage": "https://github.com/dudusilvah/bot-bot#readme"
 }
