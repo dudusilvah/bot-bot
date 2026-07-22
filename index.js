@@ -35,6 +35,7 @@ const STAFF_ROLE_1 = "1501576408663851088";
 const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
 const DONO_ID = "616758567491600411";
+const SERVER_ID = "1501048333748408351";   // ← Seu servidor
 
 const registros = new Map();
 const aprovadosPendentes = new Map();
@@ -43,29 +44,30 @@ const aprovadosPendentes = new Map();
 client.once("ready", async () => {
   console.log(`Bot online: ${client.user.tag}`);
 
-  // Comando /aviso
-  const avisoCommand = new SlashCommandBuilder()
-    .setName("aviso")
-    .setDescription("Cria um aviso oficial da facção")
-    .addStringOption(option =>
-      option.setName("titulo")
-        .setDescription("Título do aviso")
-        .setRequired(true))
-    .addStringOption(option =>
-      option.setName("texto")
-        .setDescription("Texto do aviso")
-        .setRequired(true));
+  const guild = client.guilds.cache.get(SERVER_ID);
 
-  await client.application.commands.create(avisoCommand);
+  if (guild) {
+    // Comando /aviso (rápido no servidor)
+    const avisoCommand = new SlashCommandBuilder()
+      .setName("aviso")
+      .setDescription("Cria um aviso oficial da facção")
+      .addStringOption(option => 
+        option.setName("titulo").setDescription("Título do aviso").setRequired(true))
+      .addStringOption(option => 
+        option.setName("texto").setDescription("Texto do aviso").setRequired(true));
 
-  // Comando /registro
-  const registroCommand = new SlashCommandBuilder()
-    .setName("registro")
-    .setDescription("Inicia o painel de registro da facção");
+    await guild.commands.create(avisoCommand);
+    console.log("✅ Comando /aviso criado com sucesso!");
 
-  await client.application.commands.create(registroCommand);
+    // Comando /registro
+    const registroCommand = new SlashCommandBuilder()
+      .setName("registro")
+      .setDescription("Inicia o painel de registro da facção");
 
-  console.log("✅ Comandos registrados!");
+    await guild.commands.create(registroCommand);
+  } else {
+    console.log("❌ Não encontrei o servidor. Verifique o ID.");
+  }
 });
 
 /* ===================== FUNÇÃO DE LOG ===================== */
@@ -96,24 +98,16 @@ async function enviarLog(title, description, color = "Blue", userId = null) {
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
 
-  // ==================== COMANDO /AVISO ====================
+  // ==================== /AVISO ====================
   if (interaction.isCommand() && interaction.commandName === "aviso") {
     const member = await interaction.guild.members.fetch(interaction.user.id);
 
-    // Verifica cargo
     if (!member.roles.cache.has(STAFF_ROLE_1)) {
-      return interaction.reply({ 
-        content: "❌ Você não tem permissão para usar este comando.", 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: "❌ Você não tem permissão para usar este comando.", ephemeral: true });
     }
 
-    // Verifica canal
     if (!AVISO_CHANNELS.includes(interaction.channel.id)) {
-      return interaction.reply({ 
-        content: "❌ Este comando só pode ser usado nos canais de aviso permitidos.", 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: "❌ Este comando só pode ser usado nos canais permitidos.", ephemeral: true });
     }
 
     const titulo = interaction.options.getString("titulo");
@@ -128,7 +122,7 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ embeds: [embed] });
   }
 
-  // ==================== COMANDO /REGISTRO ====================
+  // ==================== /REGISTRO ====================
   if (interaction.isCommand() && interaction.commandName === "registro") {
     if (interaction.user.id !== DONO_ID) {
       return interaction.reply({ content: "❌ Você não tem permissão.", ephemeral: true });
@@ -229,8 +223,7 @@ client.on("interactionCreate", async (interaction) => {
     registros.delete(targetId);
 
     await interaction.reply({ content: `✅ Registro de <@${targetId}> fechado.`, ephemeral: true });
-    await enviarLog("🔒 Registro Fechado Manualmente", 
-      `Fechado por <@${interaction.user.id}>`, "Red");
+    await enviarLog("🔒 Registro Fechado Manualmente", `Fechado por <@${interaction.user.id}>`, "Red");
   }
 });
 
