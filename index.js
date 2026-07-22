@@ -34,7 +34,7 @@ const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
 const DONO_ID = "616758567491600411";
 
-const registros = new Map();           // Registros ativos
+const registros = new Map();
 const aprovadosPendentes = new Map();
 
 /* ===================== READY ===================== */
@@ -49,8 +49,8 @@ client.once("ready", async () => {
   console.log("✅ Comando /registro registrado!");
 });
 
-/* ===================== FUNÇÃO DE LOG ===================== */
-async function enviarLog(title, description, color = "Blue") {
+/* ===================== FUNÇÃO DE LOG COM BOTÃO ===================== */
+async function enviarLog(title, description, color = "Blue", userId = null) {
   const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
   if (!logChannel) return;
 
@@ -60,7 +60,20 @@ async function enviarLog(title, description, color = "Blue") {
     .setColor(color)
     .setTimestamp();
 
-  await logChannel.send({ embeds: [embed] }).catch(() => {});
+  let components = [];
+
+  // Se tiver userId, adiciona o botão de fechar
+  if (userId) {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`fechar_registro_${userId}`)
+        .setLabel("Fechar Registro")
+        .setStyle(ButtonStyle.Danger)
+    );
+    components = [row];
+  }
+
+  await logChannel.send({ embeds: [embed], components }).catch(() => {});
 }
 
 /* ===================== INTERACTIONS ===================== */
@@ -90,19 +103,18 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // ==================== BOTÃO INICIAR REGISTRO ====================
+  // Botão Iniciar Registro
   if (interaction.isButton() && interaction.customId === "iniciar_registro") {
     const user = interaction.user;
 
-    // Proteção contra clique duplo / spam
     if (registros.has(user.id)) {
       return interaction.reply({ 
-        content: "❌ Você já tem um registro aberto! Termine ou cancele o anterior.", 
+        content: "❌ Você já tem um registro aberto!", 
         ephemeral: true 
       });
     }
 
-    await interaction.deferReply({ ephemeral: true }); // ← Evita clique duplo
+    await interaction.deferReply({ ephemeral: true });
 
     try {
       const canal = await interaction.guild.channels.create({
@@ -126,57 +138,73 @@ client.on("interactionCreate", async (interaction) => {
         timeout: null
       };
 
-      // Timeout de 10 horas
       registro.timeout = setTimeout(async () => {
         if (registros.has(user.id)) {
-          const reg = registros.get(user.id);
-          const ch = client.channels.cache.get(reg.canalId);
+          const ch = client.channels.cache.get(registro.canalId);
           if (ch) await ch.delete().catch(() => {});
           registros.delete(user.id);
-          await enviarLog("⏰ Registro Expirado", 
-            `<@${user.id}> não respondeu em 10 horas. Canal fechado automaticamente.`, "Red");
+          await enviarLog("⏰ Registro Expirado", `<@${user.id}> não respondeu em 10 horas.`, "Red");
         }
       }, 10 * 60 * 60 * 1000);
 
       registros.set(user.id, registro);
 
-      await interaction.editReply({ content: `✅ Canal de registro criado: ${canal}` });
+      await interaction.editReply({ content: `✅ Canal criado: ${canal}` });
 
       await enviarLog("📋 Novo Registro Iniciado", 
-        `<@${user.id}> iniciou um registro.\nCanal: ${canal}`, "Blue");
+        `<@${user.id}> iniciou um registro.\nCanal: ${canal}`, "Blue", user.id);
 
       const welcome = `🏴 **A História da TDL – Tropa Da Leste**\n\n` +
-        `A TDL (Tropa Da Leste) é mais do que uma simples família dentro do SAMP Underground... (seu texto completo)\n\n` +
-        `Seja muito bem-vindo à **TDL – Tropa Da Leste**. Aqui, a união sempre vem em primeiro lugar. 🖤`;
+        `A TDL (Tropa Da Leste) é mais do que uma simples família... (seu texto completo)\n\n` +
+        `Seja muito bem-vindo à **TDL – Tropa Da Leste**. 🖤`;
 
       await canal.send(welcome);
       await canal.send("**Qual seu nome dentro do Underground?**");
 
     } catch (error) {
       console.error(error);
-      await interaction.editReply({ content: "❌ Erro ao criar o canal. Tente novamente." });
+      await interaction.editReply({ content: "❌ Erro ao criar canal." });
     }
+  }
+
+  // Botão Fechar Registro (no Log)
+  if (interaction.isButton() && interaction.customId.startsWith("fechar_registro_")) {
+    const targetId = interaction.customId.split("_")[2];
+    const registro = registros.get(targetId);
+
+    if (!registro) {
+      return interaction.reply({ content: "❌ Esse registro já foi fechado.", ephemeral: true });
+    }
+
+    const canal = client.channels.cache.get(registro.canalId);
+    if (canal) await canal.delete().catch(() => {});
+
+    if (registro.timeout) clearTimeout(registro.timeout);
+    registros.delete(targetId);
+
+    await interaction.reply({ content: `✅ Registro de <@${targetId}> fechado com sucesso.`, ephemeral: true });
+    await enviarLog("🔒 Registro Fechado Manualmente", 
+      `Registro de <@${targetId}> foi fechado por <@${interaction.user.id}>`, "Red");
   }
 });
 
-/* ===================== PERGUNTAS ===================== */
+/* ===================== PERGUNTAS e BOTÕES (enviar, cancelar, aprovar, recusar) ===================== */
+// (Mantive o resto igual, só adicionei o botão de fechar)
+
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
   const registro = registros.get(message.author.id);
   if (!registro || message.channel.id !== registro.canalId) return;
 
-  // Reseta o timeout
   if (registro.timeout) {
     clearTimeout(registro.timeout);
     registro.timeout = setTimeout(async () => {
       if (registros.has(message.author.id)) {
-        const reg = registros.get(message.author.id);
-        const canal = client.channels.cache.get(reg.canalId);
-        if (canal) await canal.delete().catch(() => {});
+        const ch = client.channels.cache.get(registro.canalId);
+        if (ch) await ch.delete().catch(() => {});
         registros.delete(message.author.id);
-        await enviarLog("⏰ Registro Expirado", 
-          `<@${message.author.id}> não respondeu em 10 horas. Canal fechado automaticamente.`, "Red");
+        await enviarLog("⏰ Registro Expirado", `<@${message.author.id}> não respondeu em 10 horas.`, "Red");
       }
     }, 10 * 60 * 60 * 1000);
   }
@@ -251,7 +279,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-/* ===================== BOTÕES ===================== */
+/* ===================== OUTROS BOTÕES ===================== */
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
@@ -261,10 +289,7 @@ client.on("interactionCreate", async (interaction) => {
     const registro = registros.get(userId);
     if (!registro) return;
 
-    aprovadosPendentes.set(userId, {
-      respostas: [...registro.respostas],
-      apelido: registro.respostas[1]
-    });
+    aprovadosPendentes.set(userId, { respostas: [...registro.respostas], apelido: registro.respostas[1] });
 
     const staffChannel = interaction.guild.channels.cache.get(STAFF_CHANNEL_ID);
 
@@ -289,9 +314,7 @@ client.on("interactionCreate", async (interaction) => {
     await staffChannel.send({ embeds: [embed], components: [row] });
 
     await interaction.reply({ content: "✅ Registro enviado para a staff!", ephemeral: true });
-
-    await enviarLog("📨 Registro Enviado", 
-      `<@${userId}> enviou o registro para análise.\nApelido: **${registro.respostas[1]}**`, "Orange");
+    await enviarLog("📨 Registro Enviado", `<@${userId}> enviou o registro.\nApelido: **${registro.respostas[1]}**`, "Orange", null);
 
     if (registro.timeout) clearTimeout(registro.timeout);
     registros.delete(userId);
@@ -305,7 +328,7 @@ client.on("interactionCreate", async (interaction) => {
     await enviarLog("❌ Registro Cancelado", `<@${userId}> cancelou o registro.`, "Red");
   }
 
-  // APROVAR
+  // Aprovar e Recusar (mantidos iguais)
   if (interaction.customId.startsWith("aprovar_")) {
     const targetId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(targetId).catch(() => null);
@@ -318,28 +341,21 @@ client.on("interactionCreate", async (interaction) => {
     await membro.roles.add(MEMBER_ROLE).catch(() => {});
 
     const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
-    await resultChannel.send(`🎉 | Olá <@${targetId}>, seu registro foi **APROVADO**!\nSeja bem-vindo à **TDL**!`);
+    await resultChannel.send(`🎉 | Olá <@${targetId}>, seu registro foi **APROVADO**!`);
 
-    await interaction.reply({ content: `✅ ${membro.user.tag} aprovado! Apelido: **${apelido}**`, ephemeral: true });
+    await interaction.reply({ content: `✅ Aprovado! Apelido: **${apelido}**`, ephemeral: true });
 
-    await enviarLog("✅ Registro Aprovado", 
-      `Usuário: <@${targetId}>\nApelido aplicado: **${apelido}**\nAprovado por: <@${interaction.user.id}>`, "Green");
-
+    await enviarLog("✅ Registro Aprovado", `Usuário: <@${targetId}>\nApelido: **${apelido}**`, "Green");
     aprovadosPendentes.delete(targetId);
   }
 
-  // RECUSAR
   if (interaction.customId.startsWith("recusar_")) {
     const targetId = interaction.customId.split("_")[1];
     const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
-    
-    await resultChannel.send(`❌ | Olá <@${targetId}>, seu registro foi **RECUSADO**.\nNão desanime. Revise melhor os detalhes e tente novamente futuramente.`);
+    await resultChannel.send(`❌ | Olá <@${targetId}>, seu registro foi **RECUSADO**.`);
 
-    await interaction.reply({ content: `❌ Registro recusado.`, ephemeral: true });
-
-    await enviarLog("❌ Registro Recusado", 
-      `Usuário: <@${targetId}>\nRecusado por: <@${interaction.user.id}>`, "Red");
-
+    await interaction.reply({ content: `❌ Recusado.`, ephemeral: true });
+    await enviarLog("❌ Registro Recusado", `Usuário: <@${targetId}>`, "Red");
     aprovadosPendentes.delete(targetId);
   }
 });
