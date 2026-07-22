@@ -29,44 +29,34 @@ const STAFF_CHANNEL_ID = "1501578418834112554";
 const RESULT_CHANNEL_ID = "1501590299003064362";
 const LOG_CHANNEL_ID = "1501628297056882820";
 
-const AVISO_CHANNELS = ["1501575818529476698", "1501576005565943901"]; // Canais permitidos para /aviso
+const AVISO_CHANNELS = ["1501575818529476698", "1501576005565943901"];
 
 const STAFF_ROLE_1 = "1501576408663851088";
 const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
 const DONO_ID = "616758567491600411";
-const SERVER_ID = "1501048333748408351";   // ← Seu servidor
-
-const registros = new Map();
-const aprovadosPendentes = new Map();
+const SERVER_ID = "1501048333748408351";
 
 /* ===================== READY ===================== */
 client.once("ready", async () => {
   console.log(`Bot online: ${client.user.tag}`);
 
   const guild = client.guilds.cache.get(SERVER_ID);
-
   if (guild) {
-    // Comando /aviso (rápido no servidor)
     const avisoCommand = new SlashCommandBuilder()
       .setName("aviso")
-      .setDescription("Cria um aviso oficial da facção")
-      .addStringOption(option => 
-        option.setName("titulo").setDescription("Título do aviso").setRequired(true))
-      .addStringOption(option => 
-        option.setName("texto").setDescription("Texto do aviso").setRequired(true));
+      .setDescription("Envia um aviso oficial da facção")
+      .addStringOption(option => option.setName("titulo").setDescription("Título do aviso").setRequired(true))
+      .addStringOption(option => option.setName("texto").setDescription("Texto do aviso").setRequired(true));
 
     await guild.commands.create(avisoCommand);
-    console.log("✅ Comando /aviso criado com sucesso!");
+    console.log("✅ /aviso registrado!");
 
-    // Comando /registro
     const registroCommand = new SlashCommandBuilder()
       .setName("registro")
       .setDescription("Inicia o painel de registro da facção");
 
     await guild.commands.create(registroCommand);
-  } else {
-    console.log("❌ Não encontrei o servidor. Verifique o ID.");
   }
 });
 
@@ -103,7 +93,7 @@ client.on("interactionCreate", async (interaction) => {
     const member = await interaction.guild.members.fetch(interaction.user.id);
 
     if (!member.roles.cache.has(STAFF_ROLE_1)) {
-      return interaction.reply({ content: "❌ Você não tem permissão para usar este comando.", ephemeral: true });
+      return interaction.reply({ content: "❌ Você não tem permissão.", ephemeral: true });
     }
 
     if (!AVISO_CHANNELS.includes(interaction.channel.id)) {
@@ -113,13 +103,10 @@ client.on("interactionCreate", async (interaction) => {
     const titulo = interaction.options.getString("titulo");
     const texto = interaction.options.getString("texto");
 
-    const embed = new EmbedBuilder()
-      .setTitle(`## ${titulo} ##`)
-      .setDescription(texto)
-      .setColor("Red")
-      .setTimestamp();
+    // Envia como mensagem normal + @everyone no final
+    const mensagem = `${titulo}\n\n${texto}\n\n@everyone`;
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply(mensagem);
   }
 
   // ==================== /REGISTRO ====================
@@ -191,8 +178,7 @@ client.on("interactionCreate", async (interaction) => {
 
       await interaction.editReply({ content: `✅ Canal criado: ${canal}` });
 
-      await enviarLog("📋 Novo Registro Iniciado", 
-        `<@${user.id}> iniciou um registro.\nCanal: ${canal}`, "Blue", user.id);
+      await enviarLog("📋 Novo Registro Iniciado", `<@${user.id}> iniciou um registro.\nCanal: ${canal}`, "Blue", user.id);
 
       const welcome = `🏴 **A História da TDL – Tropa Da Leste**\n\n` +
         `A TDL (Tropa Da Leste) é mais do que uma simples família... (seu texto completo)\n\n` +
