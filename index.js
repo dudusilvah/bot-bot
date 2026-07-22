@@ -29,7 +29,7 @@ const STAFF_CHANNEL_ID = "1501578418834112554";
 const RESULT_CHANNEL_ID = "1501590299003064362";
 const LOG_CHANNEL_ID = "1501628297056882820";
 
-const STAFF_ROLE_1 = "1501576408663851088";
+const STAFF_ROLE_1 = "1501576408663851088";   // Cargo que pode usar /aviso
 const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
 const DONO_ID = "616758567491600411";
@@ -41,15 +41,31 @@ const aprovadosPendentes = new Map();
 client.once("ready", async () => {
   console.log(`Bot online: ${client.user.tag}`);
 
-  const comando = new SlashCommandBuilder()
+  // Registro do comando /aviso
+  const avisoCommand = new SlashCommandBuilder()
+    .setName("aviso")
+    .setDescription("Cria um aviso oficial da facção")
+    .addStringOption(option =>
+      option.setName("titulo")
+        .setDescription("Título do aviso")
+        .setRequired(true))
+    .addStringOption(option =>
+      option.setName("texto")
+        .setDescription("Texto do aviso")
+        .setRequired(true));
+
+  await client.application.commands.create(avisoCommand);
+  console.log("✅ Comando /aviso registrado!");
+
+  // Comando /registro (mantido)
+  const registroCommand = new SlashCommandBuilder()
     .setName("registro")
     .setDescription("Inicia o painel de registro da facção");
 
-  await client.application.commands.create(comando);
-  console.log("✅ Comando /registro registrado!");
+  await client.application.commands.create(registroCommand);
 });
 
-/* ===================== FUNÇÃO DE LOG COM BOTÃO ===================== */
+/* ===================== FUNÇÃO DE LOG ===================== */
 async function enviarLog(title, description, color = "Blue", userId = null) {
   const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
   if (!logChannel) return;
@@ -61,8 +77,6 @@ async function enviarLog(title, description, color = "Blue", userId = null) {
     .setTimestamp();
 
   let components = [];
-
-  // Se tiver userId, adiciona o botão de fechar
   if (userId) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -79,7 +93,30 @@ async function enviarLog(title, description, color = "Blue", userId = null) {
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
 
-  // Comando /registro
+  // ==================== COMANDO /AVISO ====================
+  if (interaction.isCommand() && interaction.commandName === "aviso") {
+    // Verifica se o usuário tem o cargo permitido
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.roles.cache.has(STAFF_ROLE_1)) {
+      return interaction.reply({ 
+        content: "❌ Você não tem permissão para usar este comando.", 
+        ephemeral: true 
+      });
+    }
+
+    const titulo = interaction.options.getString("titulo");
+    const texto = interaction.options.getString("texto");
+
+    const embed = new EmbedBuilder()
+      .setTitle(`## ${titulo} ##`)
+      .setDescription(texto)
+      .setColor("Red")           // Cor vermelha para avisos (pode mudar)
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // ==================== COMANDO /REGISTRO ====================
   if (interaction.isCommand() && interaction.commandName === "registro") {
     if (interaction.user.id !== DONO_ID) {
       return interaction.reply({ content: "❌ Você não tem permissão.", ephemeral: true });
@@ -103,15 +140,13 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // Botão Iniciar Registro
+  // ==================== BOTÃO INICIAR REGISTRO ====================
   if (interaction.isButton() && interaction.customId === "iniciar_registro") {
+    // ... (seu código atual mantido igual)
     const user = interaction.user;
 
     if (registros.has(user.id)) {
-      return interaction.reply({ 
-        content: "❌ Você já tem um registro aberto!", 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: "❌ Você já tem um registro aberto!", ephemeral: true });
     }
 
     await interaction.deferReply({ ephemeral: true });
@@ -167,7 +202,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // Botão Fechar Registro (no Log)
+  // Botão Fechar Registro (mantido)
   if (interaction.isButton() && interaction.customId.startsWith("fechar_registro_")) {
     const targetId = interaction.customId.split("_")[2];
     const registro = registros.get(targetId);
@@ -182,18 +217,17 @@ client.on("interactionCreate", async (interaction) => {
     if (registro.timeout) clearTimeout(registro.timeout);
     registros.delete(targetId);
 
-    await interaction.reply({ content: `✅ Registro de <@${targetId}> fechado com sucesso.`, ephemeral: true });
+    await interaction.reply({ content: `✅ Registro de <@${targetId}> fechado.`, ephemeral: true });
     await enviarLog("🔒 Registro Fechado Manualmente", 
-      `Registro de <@${targetId}> foi fechado por <@${interaction.user.id}>`, "Red");
+      `Fechado por <@${interaction.user.id}>`, "Red");
   }
 });
 
-/* ===================== PERGUNTAS e BOTÕES (enviar, cancelar, aprovar, recusar) ===================== */
-// (Mantive o resto igual, só adicionei o botão de fechar)
+/* ===================== PERGUNTAS e OUTROS BOTÕES ===================== */
+// (O resto do código de perguntas, enviar, cancelar, aprovar e recusar permanece igual ao seu último código)
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
   const registro = registros.get(message.author.id);
   if (!registro || message.channel.id !== registro.canalId) return;
 
@@ -279,13 +313,13 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-/* ===================== OUTROS BOTÕES ===================== */
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
   const userId = interaction.user.id;
 
   if (interaction.customId === "enviar_registro") {
+    // ... (seu código atual)
     const registro = registros.get(userId);
     if (!registro) return;
 
@@ -320,6 +354,7 @@ client.on("interactionCreate", async (interaction) => {
     registros.delete(userId);
   }
 
+  // ... (cancelar, aprovar, recusar permanecem iguais)
   if (interaction.customId === "cancelar_registro") {
     const registro = registros.get(userId);
     if (registro && registro.timeout) clearTimeout(registro.timeout);
@@ -328,7 +363,6 @@ client.on("interactionCreate", async (interaction) => {
     await enviarLog("❌ Registro Cancelado", `<@${userId}> cancelou o registro.`, "Red");
   }
 
-  // Aprovar e Recusar (mantidos iguais)
   if (interaction.customId.startsWith("aprovar_")) {
     const targetId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(targetId).catch(() => null);
