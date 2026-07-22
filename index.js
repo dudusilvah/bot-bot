@@ -27,14 +27,14 @@ const client = new Client({
 const REGISTER_CHANNEL_ID = "1501579466445422652";
 const STAFF_CHANNEL_ID = "1501578418834112554";
 const RESULT_CHANNEL_ID = "1501590299003064362";
-const LOG_CHANNEL_ID = "1501628297056882820";   // ← Canal de Logs
+const LOG_CHANNEL_ID = "1501628297056882820";
 
 const STAFF_ROLE_1 = "1501576408663851088";
 const STAFF_ROLE_2 = "1502157567428788414";
 const MEMBER_ROLE = "1501576591145173184";
 const DONO_ID = "616758567491600411";
 
-const registros = new Map();
+const registros = new Map();           // Registros ativos
 const aprovadosPendentes = new Map();
 
 /* ===================== READY ===================== */
@@ -66,6 +66,7 @@ async function enviarLog(title, description, color = "Blue") {
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
 
+  // Comando /registro
   if (interaction.isCommand() && interaction.commandName === "registro") {
     if (interaction.user.id !== DONO_ID) {
       return interaction.reply({ content: "❌ Você não tem permissão.", ephemeral: true });
@@ -89,8 +90,17 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ embeds: [embed], components: [row] });
   }
 
+  // Botão Iniciar Registro
   if (interaction.isButton() && interaction.customId === "iniciar_registro") {
     const user = interaction.user;
+
+    // ===== EVITA MÚLTIPLOS REGISTROS =====
+    if (registros.has(user.id)) {
+      return interaction.reply({ 
+        content: "❌ Você já tem um registro aberto! Termine ou cancele o anterior.", 
+        ephemeral: true 
+      });
+    }
 
     const canal = await interaction.guild.channels.create({
       name: `registro-${user.username}`,
@@ -105,12 +115,25 @@ client.on("interactionCreate", async (interaction) => {
       ]
     });
 
-    registros.set(user.id, {
+    const registro = {
       etapa: 0,
       respostas: [],
       canalId: canal.id,
-      user: user
-    });
+      user: user,
+      timeout: null
+    };
+
+    // Timeout de 10 horas (36000000 ms)
+    registro.timeout = setTimeout(async () => {
+      if (registros.has(user.id)) {
+        await canal.delete().catch(() => {});
+        registros.delete(user.id);
+        await enviarLog("⏰ Registro Expirado", 
+          `<@${user.id}> não respondeu em 10 horas. Canal fechado automaticamente.`, "Red");
+      }
+    }, 10 * 60 * 60 * 1000); // 10 horas
+
+    registros.set(user.id, registro);
 
     await interaction.reply({ content: `✅ Canal de registro criado: ${canal}`, ephemeral: true });
 
@@ -119,7 +142,7 @@ client.on("interactionCreate", async (interaction) => {
 
     const welcome = `🏴 **A História da TDL – Tropa Da Leste**\n\n` +
       `A TDL (Tropa Da Leste) é mais do que uma simples família dentro do SAMP Underground. Somos uma comunidade construída sobre lealdade, respeito, união, comprometimento e confiança.\n\n` +
-      `Nossa história começou há muito tempo, quando éramos conhecidos como Dark Thunder... (texto completo que você enviou)\n\n` +
+      `Nossa história começou há muito tempo, quando éramos conhecidos como Dark Thunder... (seu texto completo)\n\n` +
       `Seja muito bem-vindo à **TDL – Tropa Da Leste**. Aqui, a união sempre vem em primeiro lugar. 🖤`;
 
     await canal.send(welcome);
@@ -133,6 +156,20 @@ client.on("messageCreate", async (message) => {
 
   const registro = registros.get(message.author.id);
   if (!registro || message.channel.id !== registro.canalId) return;
+
+  // Reseta o timeout a cada mensagem (para não fechar enquanto a pessoa está respondendo)
+  if (registro.timeout) {
+    clearTimeout(registro.timeout);
+    registro.timeout = setTimeout(async () => {
+      if (registros.has(message.author.id)) {
+        const canal = client.channels.cache.get(registro.canalId);
+        if (canal) await canal.delete().catch(() => {});
+        registros.delete(message.author.id);
+        await enviarLog("⏰ Registro Expirado", 
+          `<@${message.author.id}> não respondeu em 10 horas. Canal fechado automaticamente.`, "Red");
+      }
+    }, 10 * 60 * 60 * 1000);
+  }
 
   const respostas = registro.respostas;
 
@@ -246,19 +283,20 @@ client.on("interactionCreate", async (interaction) => {
     await enviarLog("📨 Registro Enviado", 
       `<@${userId}> enviou o registro para análise.\nApelido: **${registro.respostas[1]}**`, "Orange");
 
-    setTimeout(() => {
-      interaction.channel.delete().catch(() => {});
-      registros.delete(userId);
-    }, 15000);
+    // Limpa o registro
+    if (registro.timeout) clearTimeout(registro.timeout);
+    registros.delete(userId);
   }
 
   if (interaction.customId === "cancelar_registro") {
+    const registro = registros.get(userId);
+    if (registro && registro.timeout) clearTimeout(registro.timeout);
     await interaction.channel.delete().catch(() => {});
     registros.delete(userId);
     await enviarLog("❌ Registro Cancelado", `<@${userId}> cancelou o registro.`, "Red");
   }
 
-  // APROVAR
+  // APROVAR e RECUSAR (mesmo de antes)
   if (interaction.customId.startsWith("aprovar_")) {
     const targetId = interaction.customId.split("_")[1];
     const membro = await interaction.guild.members.fetch(targetId).catch(() => null);
@@ -281,7 +319,6 @@ client.on("interactionCreate", async (interaction) => {
     aprovadosPendentes.delete(targetId);
   }
 
-  // RECUSAR
   if (interaction.customId.startsWith("recusar_")) {
     const targetId = interaction.customId.split("_")[1];
     const resultChannel = interaction.guild.channels.cache.get(RESULT_CHANNEL_ID);
