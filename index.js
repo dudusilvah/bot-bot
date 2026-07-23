@@ -60,35 +60,10 @@ client.once("ready", async () => {
   }
 });
 
-/* ===================== FUNÇÃO DE LOG ===================== */
-async function enviarLog(title, description, color = "Blue", userId = null) {
-  const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
-  if (!logChannel) return;
-
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor(color)
-    .setTimestamp();
-
-  let components = [];
-  if (userId) {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`fechar_registro_${userId}`)
-        .setLabel("Fechar Registro")
-        .setStyle(ButtonStyle.Danger)
-    );
-    components = [row];
-  }
-
-  await logChannel.send({ embeds: [embed], components }).catch(() => {});
-}
-
 /* ===================== INTERACTIONS ===================== */
 client.on("interactionCreate", async (interaction) => {
 
-  // ==================== /AVISO ====================
+  // ==================== /AVISO (SILENCIOSO) ====================
   if (interaction.isCommand() && interaction.commandName === "aviso") {
     const member = await interaction.guild.members.fetch(interaction.user.id);
 
@@ -103,10 +78,12 @@ client.on("interactionCreate", async (interaction) => {
     const titulo = interaction.options.getString("titulo");
     const texto = interaction.options.getString("texto");
 
-    // Envia como mensagem normal + @everyone no final
     const mensagem = `${titulo}\n\n${texto}\n\n@everyone`;
 
-    await interaction.reply(mensagem);
+    // Defer + editReply para não mostrar o comando usado
+    await interaction.deferReply({ ephemeral: true });
+    await interaction.deleteReply();           // Apaga a resposta invisível
+    await interaction.channel.send(mensagem);  // Envia a mensagem limpa
   }
 
   // ==================== /REGISTRO ====================
@@ -198,9 +175,7 @@ client.on("interactionCreate", async (interaction) => {
     const targetId = interaction.customId.split("_")[2];
     const registro = registros.get(targetId);
 
-    if (!registro) {
-      return interaction.reply({ content: "❌ Esse registro já foi fechado.", ephemeral: true });
-    }
+    if (!registro) return interaction.reply({ content: "❌ Esse registro já foi fechado.", ephemeral: true });
 
     const canal = client.channels.cache.get(registro.canalId);
     if (canal) await canal.delete().catch(() => {});
